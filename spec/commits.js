@@ -1,11 +1,12 @@
 module.exports = ({
-  days=1,  
+  from="now-1d",
+  to="now",  
 }={})=>({
   props: {
     index: 'commits',
     type: 'doc',
-    query: `dateUploaded:[now-${days}d TO now]`,
-    source: [ "repo", "date","sha","author.email","message","tags", "stat","dateUploaded" ],
+    query: `date:[${from} TO ${to}] `,   //Uploaded   AND repo:SC_WFM
+    source: [ "repo", "date","sha","parents","author.email","message","tags", "stat","dateUploaded" ],
   },
   query: `    
     MERGE (x:Commit {sha: hit._source.sha}) 
@@ -15,6 +16,7 @@ module.exports = ({
       ,x.message = hit._source.message
       ,x.author = hit._source.author.email
       ,x.dateUploaded = hit._source.dateUploaded
+      ,x.tags = hit._source.tags
     MERGE 
       (u:User {
         email: coalesce(hit._source.author.email,'unknown')
@@ -27,8 +29,23 @@ module.exports = ({
       })
     MERGE
       (x)-[:COMMIT_IN_REPO]->(r)
+    FOREACH 
+      (githash in hit._source.parents |
+        MERGE (c:Commit {sha: trim(githash)})
+        MERGE (x)-[rcf:COMMIT_HAS_PARENT]->(c)
+      ) 
+    FOREACH 
+      (tag in hit._source.tags |
+        MERGE (t:Tag {name: tag,repo:hit._source.repo})
+        MERGE (x)-[rct:TAGGED_WITH]->(t)
+      )    
   `,
-  /*match: `
+  /*
+   ,x.tags = hit._source.tags
+
+  
+  
+  match: `
     MATCH
       (b:Bug)-[r:ASSIGNED_TO]-(uOld:User)
     WHERE

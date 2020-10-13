@@ -42,8 +42,17 @@ const runQuery = async (specName, params) => {
       ...config.props,
       ...spec.props,
     };
-    const result = await session.run(cypher(spec), spec);    //{props:spec.props}
-    ret.create = result.records;
+    
+    const c = cypher(spec);
+    console.log(
+      "Connected:",
+      spec.props.query,
+      //c,
+      );
+    const result = await session.run(c, spec);    //{props:spec.props}
+    console.log("Got result:",spec.props.query);
+    //ret.spec = spec;
+    ret.create = result ;//.records;
     
     //only iterate if specified
     if(spec.match && spec.update){
@@ -51,8 +60,8 @@ const runQuery = async (specName, params) => {
       const updateResult = await session.run(update(spec),spec);      //{match:spec.match,update:spec.update}
       ret.update = updateResult.records;
     }
-    console.log(
-      ops.map(x=>ret[x].length)
+    console.log("ops", ret,
+      ops.map(x=>ret[x].records.length)
     );
     return ret;
 
@@ -74,14 +83,16 @@ const runQuery = async (specName, params) => {
 app.get('/update/:type',async (req,res)=>{
   try {
     const ret = await runQuery(req.params.type, req.query);
+    //console.log("return:",ret);
     res.send(JSON.stringify(
-      Object.entries(ret).reduce(
+      ret,
+      /*Object.entries(ret).reduce(
         (acc, [name,value] ) => {
-          acc[name] = value.length;
+          acc[name] = value.records.length;
           return acc;
         },
         {}
-      ),
+      ),*/
       null,2
     ));
   } catch(e){

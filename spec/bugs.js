@@ -1,10 +1,11 @@
 module.exports = ({
-  days=1,  
+  from="now-1d",       // arguments should be escaped
+  to="now", 
 }={})=>({
   props: {
     index: 'jira',
     type: '_doc',
-    query: `BUG AND updated:[now-${days}d TO now]`,
+    query: `BUG AND updated:[${from} TO ${to}]`,
     source: [ "key", "wfoTeamName","summary","assignee","gitHashes" ],
   },
   query: `    
