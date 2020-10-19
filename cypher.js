@@ -15,7 +15,7 @@ and updating it into Neo4j.
 */
 
 module.exports = {
-  cypher: ({
+  getFromEsCypher: ({
     query,
     returnHits=false,     // should items created be included in return value (slower)
   }={}) => `
@@ -65,7 +65,7 @@ module.exports = {
     ,props
     ${returnHits ? ",firstHits+x as items" : ""} 
   `,
-  update: ({}={}) => `
+  iterateUpdate: ({}={}) => `
     CALL apoc.periodic.iterate(
       $match, 
       $update,

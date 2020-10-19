@@ -8,9 +8,9 @@ See http://neo4j-contrib.github.io/neo4j-apoc-procedures/3.5/database-integratio
 for the method used. (apoc.periodic.iterate can be called afterwards to handle deletions etc,
 which otherwise cause performance problems).
 */
-
+const sequential = require('promise-sequential');
 const config = require('./config/config');
-const {cypher,update} = require('./cypher');
+//const {getFromEsCypher,update} = require('./cypher');
 
 const express = require('express');
 const app = express();
@@ -42,14 +42,38 @@ const runQuery = async (specName, params) => {
       ...config.props,
       ...spec.props,
     };
-    
-    const c = cypher(spec);
+    spec.queries = spec.queries || [];
+ 
+    console.log(
+      "Connected:",
+      //spec.props.query,
+      //c,
+    );    
+
+    const promises = spec.queries.map((q,i)=>()=>{
+      console.log("query",i,q.cypher);
+      const ret = session.run(q.cypher,{
+        ...q.params,
+        props: {
+          ...config.props,
+          ...spec.props,
+          ...(q.params && q.params.props),
+        },
+      });
+      //console.log("result",ret);
+      return ret;
+    });
+    return await sequential(promises);
+
+    //return results;
+    /*
+    const c = getFromEsCypher(spec);
     console.log(
       "Connected:",
       spec.props.query,
       //c,
       );
-    const result = await session.run(c, spec);    //{props:spec.props}
+    const result = await session.run(c,spec);    //spec   {props:spec.props}
     console.log("Got result:",spec.props.query);
     //ret.spec = spec;
     ret.create = result ;//.records;
@@ -61,8 +85,8 @@ const runQuery = async (specName, params) => {
       ret.update = updateResult.records;
     }
     console.log("ops", ret,
-      ops.map(x=>ret[x].records.length)
-    );
+      ops.map(x=>ret[x].records && ret[x].records.length)
+    );*/
     return ret;
 
   } catch (e){
