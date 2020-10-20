@@ -26,12 +26,13 @@ module.exports = ({
     },
     // component:"WFM Common" AND containedInRelease:*15.2*0516 AND
     //query: `containedInRelease:* AND repo:"T3-Passed-QA" AND NOT extension:jar AND date:[${from} TO ${to}]`,   //Uploaded    :"performance management"
-    query: `containedInRelease:* AND repo:"T3-Passed-QA" AND NOT extension:jar AND date:[${from} TO ${to}]`,   //Uploaded    :"performance management"
+    query: `containedInRelease:* AND (repo:"T3-Passed-QA" OR repo:"T3-In-QA-Testing") ` +
+           `AND NOT extension:jar AND date:[${from} TO ${to}]`,   //Uploaded    :"performance management"
     source: [ "repo", "date","product","component","version","kb","containedInRelease", "repo","lastUpdated" ],
   },
   queries: [
     {
-      props: {
+      params: {
         // none
       },
       cypher: getFromEsCypher({
@@ -82,7 +83,18 @@ module.exports = ({
           return rc
         `
       }
-    },{    // and c.repo ='SC_ALGO'
+    },
+        // and c.repo ='SC_ALGO'
+      // update release info in ES based on joins made
+/*
+ES back update:
+https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
+
+http://neo4j-contrib.github.io/neo4j-apoc-procedures/3.5/database-integration/elasticsearch/
+
+Note that URL format for update has changed! this is for v6.2 ES:
+*/
+    { 
       cypher: `
         WITH $props as props
         MATCH (c:Commit)
