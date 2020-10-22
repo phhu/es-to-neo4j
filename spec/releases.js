@@ -31,69 +31,88 @@ module.exports = ({
     source: [ "repo", "date","product","component","version","kb","containedInRelease", "repo","lastUpdated" ],
   },
   queries: [
-    {
-      params: {
-        // none
-      },
-      cypher: getFromEsCypher({
-        query: `
-          MATCH (t:Tag)<-[:TAGGED_WITH]-(c:Commit)
-            WHERE
-              t.repo = $props.reposByComponent[hit._source.component] 
-              AND t.name =~ '.*(rel|RC).*' + hit._source.version
-            MERGE (x:Release {name: hit._source.containedInRelease})
-            //set x.test = 8
-            //set t.test = 8
-            MERGE (k:KB {number: hit._source.kb})
-              set k.repo = hit._source.repo
-              //set k.test = 8
-            MERGE 
-              (k)-[:KB_IN_RELEASE]->(x)
-            MERGE
-              (k)-[:KB_FOR_TAG]->(t)
-            MERGE
-              (t)-[:TAG_IN_RELEASE]->(x)
-            SET c:ReleaseCommit
-            SET c.containedInRelease = hit._source.containedInRelease
-            SET c.releaseName = hit._source.containedInRelease
-        `,
-      })
-    },{
-      cypher: iterateUpdate({}),
-      params: {     //  {sha:"e45acef0d7aa50382997175560a03bda1c9741ae"}
-        match: `
-          MATCH (rc:ReleaseCommit)
-          RETURN rc 
-        `,
-        update: `
-          CALL apoc.path.expandConfig(rc, {
-            relationshipFilter: ">COMMIT_HAS_PARENT",  
-            labelFilter: "/ReleaseCommit|Commit",
-            bfs: false,
-            uniqueness: "NODE_GLOBAL",
-            maxLevel: 500
-          })
-          YIELD path
-          FOREACH (n in tail(reverse(tail(nodes(path)))) | 
-            SET n.containedInRelease=rc.releaseName
-            set n.releaseShort = right(rc.releaseName,4)
-          )
-          set rc.releaseShort = right(rc.releaseName,4)
-          //set rc.test = 10
-          return rc
-        `
-      }
-    },
-        // and c.repo ='SC_ALGO'
-      // update release info in ES based on joins made
-/*
-ES back update:
-https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
+//     {
+//       params: {
+//         // none
+//       },
+//       cypher: getFromEsCypher({
+//         query: `
+//           MATCH (t:Tag)<-[:TAGGED_WITH]-(c:Commit)
+//             WHERE
+//               t.repo = $props.reposByComponent[hit._source.component] 
+//               AND t.name =~ '.*(rel|RC|FND_).*' + hit._source.version
+//             MERGE (x:Release {name: hit._source.containedInRelease})
+//             //set x.test = 8
+//             //set t.test = 8
+//             MERGE (k:KB {number: hit._source.kb})
+//               set k.repo = hit._source.repo
+//               //set k.test = 8
+//             MERGE 
+//               (k)-[:KB_IN_RELEASE]->(x)
+//             MERGE
+//               (k)-[:KB_FOR_TAG]->(t)
+//             MERGE
+//               (t)-[:TAG_IN_RELEASE]->(x)
+//             SET c:ReleaseCommit
+//             SET c.containedInRelease = hit._source.containedInRelease
+//             SET c.releaseName = hit._source.containedInRelease
+//         `,
+//       })
+//     },{
+//       cypher: iterateUpdate({}),
+//       params: {     //  {sha:"e45acef0d7aa50382997175560a03bda1c9741ae"}
+//         match: `
+//           MATCH (rc:ReleaseCommit)
+//           RETURN rc 
+//         `,
+//         update: `
+//           CALL apoc.path.expandConfig(rc, {
+//             relationshipFilter: ">COMMIT_HAS_PARENT",  
+//             labelFilter: "/ReleaseCommit|Commit",
+//             bfs: false,
+//             uniqueness: "NODE_GLOBAL",
+//             maxLevel: 500
+//           })
+//           YIELD path
+//           FOREACH (n in tail(reverse(tail(nodes(path)))) | 
+//             SET n.containedInRelease=rc.releaseName
+//             set n.releaseShort = right(rc.releaseName,4)
+//           )
+//           set rc.releaseShort = right(rc.releaseName,4)
+//           //set rc.test = 10
+//           return rc
+//         `
+//       }
+//     },
+//         // and c.repo ='SC_ALGO'
+//       // update release info in ES based on joins made
+// /*
+// ES back update:
+// https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
 
-http://neo4j-contrib.github.io/neo4j-apoc-procedures/3.5/database-integration/elasticsearch/
+// http://neo4j-contrib.github.io/neo4j-apoc-procedures/3.5/database-integration/elasticsearch/
 
-Note that URL format for update has changed! this is for v6.2 ES:
-*/
+// Note that URL format for update has changed! this is for v6.2 ES:
+// */
+//     { 
+//       cypher: `
+//         WITH $props as props
+//         MATCH (c:Commit)
+//         WHERE c.containedInRelease is not null 
+//         CALL apoc.es.postRaw(
+//           props.host,
+//           'commits' + '/doc/'+c.sha+ '/_update',
+//           {doc:
+//             {inRelease: c.containedInRelease}
+//           }
+//         ) YIELD value as v
+//         RETURN 
+//           c.sha,
+//           c.repo,
+//           c.containedInRelease, 
+//           v
+//       `
+//     },
     { 
       cypher: `
         WITH $props as props
@@ -101,9 +120,17 @@ Note that URL format for update has changed! this is for v6.2 ES:
         WHERE c.containedInRelease is not null 
         CALL apoc.es.postRaw(
           props.host,
-          'commits' + '/doc/'+c.sha+ '/_update',
-          {doc:
-            {inRelease: c.containedInRelease}
+          'diffs' + '/_update_by_query',
+          {
+            script: {
+              source: "ctx._source.inRelease = '" + c.containedInRelease + "'",
+              lang: "painless"
+            },
+            query: {
+              term: {
+                sha: c.sha
+              }
+            }
           }
         ) YIELD value as v
         RETURN 
@@ -116,6 +143,24 @@ Note that URL format for update has changed! this is for v6.2 ES:
   ]
  
 });
+
+/*
+{
+  "script": {
+    "source": "ctx._source.likes++",
+    "lang": "painless"
+  },
+  "query": {
+    "term": {
+      "user": "kimchy"
+    }
+  }
+}
+
+*/
+
+
+
 
 /*
 SET c:ReleaseCommit

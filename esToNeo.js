@@ -125,10 +125,10 @@ app.get('/update/:type',async (req,res)=>{
   }
 });
 
-app.listen(port, function() {
+const server = app.listen(port, function() {
    console.log('Server started on port: ' + port);
 });
-
+server.setTimeout(20* 60*1000);
 //const singleRecord = result.records[0]
 //const node = singleRecord.get(0)
   
